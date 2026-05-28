@@ -20,8 +20,6 @@ def init_db():
             id       TEXT PRIMARY KEY,
             numero   TEXT NOT NULL,
             nome     TEXT NOT NULL,
-            icone    TEXT,
-            cor      TEXT,
             objetivo TEXT,
             descricao TEXT
         );
@@ -58,8 +56,8 @@ def _seed(cur):
     from app.seed_data import EIXOS
     for e in EIXOS:
         cur.execute(
-            "INSERT INTO eixos VALUES (?,?,?,?,?,?,?)",
-            (e["id"], e["numero"], e["nome"], e["icone"], e["cor"], e["objetivo"], e["descricao"]),
+            "INSERT INTO eixos VALUES (?,?,?,?,?)",
+            (e["id"], e["numero"], e["nome"], e["objetivo"], e["descricao"]),
         )
         for at in e["atividades"]:
             cur.execute(

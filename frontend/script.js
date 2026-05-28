@@ -1,0 +1,370 @@
+const API = 'http://localhost:8000';
+
+const STATUS_COLOR = {
+  'Não iniciado': '#6b7280', 'Em andamento': '#f59e0b',
+  'Concluído': '#10b981',   'Atrasado': '#ef4444', 'Bloqueado': '#8b5cf6', '': '#6b7280',
+};
+const STATUS_LIST = ['Não iniciado','Em andamento','Concluído','Atrasado','Bloqueado'];
+
+let summaries = [];
+let activeEixo = null;
+
+// Boot 
+
+async function init() {
+  summaries = await api('/eixos/');
+  renderGrid();
+  updateHeaderStats();
+  document.getElementById('loading').style.display = 'none';
+  const g = document.getElementById('eixos-grid');
+  g.style.display = 'flex';
+  document.getElementById('btn-add-eixo').style.display = 'block';
+}
+
+// API 
+async function api(path, opts = {}) {
+  const r = await fetch(API + path, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  if (r.status === 204) return null;
+  return r.json();
+}
+
+async function patchStatus(id, status) {
+  return api(`/acoes/${id}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+}
+
+// Stats
+function updateHeaderStats() {
+  const total = summaries.reduce((s, e) => s + e.total_acoes, 0);
+  const ok    = summaries.reduce((s, e) => s + e.concluidas, 0);
+  const wa    = summaries.reduce((s, e) => s + e.em_andamento, 0);
+  const late  = summaries.reduce((s, e) => s + e.atrasadas, 0);
+  const prog  = total ? Math.round(((ok + wa * 0.5) / total) * 100) : 0;
+  document.getElementById('s-prog').textContent = prog + '%';
+  document.getElementById('s-ok').textContent   = ok;
+  document.getElementById('s-wa').textContent   = wa;
+  document.getElementById('s-err').textContent  = late;
+}
+
+// Grid
+function renderGrid() {
+  const grid = document.getElementById('eixos-grid');
+  grid.innerHTML = summaries.map(e => eixoCardHTML(e)).join('');
+  grid.querySelectorAll('.eixo-card').forEach(card => {
+    card.addEventListener('click', () => toggleEixo(card.dataset.id));
+  });
+}
+
+function eixoCardHTML(e) {
+  const isActive = activeEixo === e.id;
+  const prog = e.progresso_pct;
+  const badgeOk   = badge('ok',   `${e.concluidas} concluídas`);
+  const badgeWa   = badge('warn', `${e.em_andamento} em andamento`);
+  const badgeLate = e.atrasadas > 0 ? badge('danger', `${e.atrasadas} atrasadas`) : '';
+
+  return `
+    <div class="eixo-card ${isActive ? 'active' : ''}" data-id="${e.id}"
+         style="border-color:${isActive ? `var(--${e.id})` : `color-mix(in srgb, var(--${e.id}) 30%, transparent)`}">
+      <div class="eixo-header">
+        <div style="flex:1">
+          <div class="eixo-label" style="color:var(--${e.id})">Eixo ${e.numero}</div>
+          <div class="eixo-nome">${e.nome}</div>
+        </div>
+        <button class="icon-btn danger" title="Excluir eixo"
+          onclick="event.stopPropagation(); confirmDelete('eixo', '${e.id}', '${e.nome.replace(/'/g,"\\'")}')">🗑</button>
+      </div>
+      <div class="progress-row">
+        <span>Progresso geral</span>
+        <strong style="color:var(--${e.id})">${prog}%</strong>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${prog}%;background:var(--${e.id})"></div>
+      </div>
+      <div class="badges">${badgeOk}${badgeWa}${badgeLate}</div>
+    </div>`;
+}
+
+function badge(type, text) {
+  return `<span class="badge" style="color:var(--${type});border-color:color-mix(in srgb,var(--${type}) 30%,transparent);background:color-mix(in srgb,var(--${type}) 10%,transparent)">${text}</span>`;
+}
+
+// Toggle detalhes
+async function toggleEixo(id) {
+  if (activeEixo === id) {
+    activeEixo = null;
+    renderGrid();
+    document.getElementById('detail').innerHTML = `
+      <div class="empty-state"><span class="arrow">←</span><span>Selecione um eixo para ver as atividades</span></div>`;
+    return;
+  }
+  activeEixo = id;
+  renderGrid();
+  const detail = document.getElementById('detail');
+  detail.innerHTML = '<div class="loading"><div class="spinner"></div>Carregando…</div>';
+  const eixo = await api(`/eixos/${id}`);
+  renderDetail(eixo);
+}
+
+// Detalhes
+function renderDetail(eixo) {
+  const cor = `var(--${eixo.id})`;
+  const detail = document.getElementById('detail');
+  detail.style.borderColor = `color-mix(in srgb, var(--${eixo.id}) 30%, transparent)`;
+
+  detail.innerHTML = `
+    <div class="detail-header">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:${cor};text-transform:uppercase;letter-spacing:.08em">Eixo ${eixo.numero} · Objetivo</div>
+        <div class="detail-objetivo">${eixo.objetivo}</div>
+      </div>
+    </div>
+    <p class="detail-desc">${eixo.descricao || ''}</p>
+    <div id="at-list">
+      ${eixo.atividades.map(at => atividadeHTML(at, eixo.id)).join('')}
+    </div>
+    <button class="btn btn-outline" style="margin-top:12px"
+      onclick="openModal('atividade', '${eixo.id}')">+ Nova Atividade</button>`;
+
+  // accordion
+  detail.querySelectorAll('.at-header').forEach(h => {
+    h.addEventListener('click', () => {
+      h.nextElementSibling.classList.toggle('open');
+      h.querySelector('.at-arrow').classList.toggle('open');
+    });
+  });
+
+  // status
+  detail.querySelectorAll('.status-select').forEach(sel => {
+    styleSelect(sel, sel.value);
+    sel.addEventListener('change', async () => {
+      styleSelect(sel, sel.value);
+      try {
+        await patchStatus(+sel.dataset.id, sel.value);
+        toast('Status atualizado');
+        await refreshSummaries();
+      } catch { toast('Erro ao salvar', true); }
+    });
+  });
+}
+
+function atividadeHTML(at, eixoId) {
+  const cor  = `var(--${eixoId})`;
+  const done = at.acoes.filter(a => a.status === 'Concluído').length;
+  const late = at.acoes.filter(a => isLate(a)).length;
+  const lateBadge = late > 0 ? badge('danger', `${late}`) : '';
+
+  return `
+    <div class="at-card">
+      <div class="at-header">
+        <div class="at-code" style="background:color-mix(in srgb,${cor} 15%,transparent);border:1px solid color-mix(in srgb,${cor} 40%,transparent);color:${cor}">${at.codigo}</div>
+        <div class="at-nome">${at.nome}</div>
+        <div class="at-meta">
+          <span class="at-count">${done}/${at.acoes.length}</span>
+          ${lateBadge}
+          <button class="icon-btn danger" title="Excluir atividade"
+            onclick="event.stopPropagation(); confirmDelete('atividade', '${at.id}', '${at.nome.replace(/'/g,"\\'")}')">🗑</button>
+          <span class="at-arrow">›</span>
+        </div>
+      </div>
+      <div class="at-body">
+        ${at.acoes.map(a => acaoHTML(a)).join('')}
+        <button class="btn btn-outline btn-sm" style="margin-top:6px"
+          onclick="openModal('acao', '${at.id}')">+ Nova Ação</button>
+      </div>
+    </div>`;
+}
+
+function acaoHTML(a) {
+  const late = isLate(a);
+  const opts = STATUS_LIST.map(s =>
+    `<option value="${s}" ${a.status === s ? 'selected' : ''}>${s}</option>`).join('');
+
+  return `
+    <div class="acao-row ${late ? 'atrasada' : ''}">
+      <div>
+        <div class="acao-desc">${a.descricao}</div>
+        <div class="acao-areas">${a.areas || ''}</div>
+      </div>
+      <div class="acao-dates">
+        <div>${fmtDate(a.inicio)}</div>
+        <div class="${late ? 'late' : ''}">→ ${fmtDate(a.termino)}</div>
+      </div>
+      <select class="status-select" data-id="${a.id}">${opts}</select>
+      <button class="icon-btn danger sm" title="Excluir ação"
+        onclick="confirmDelete('acao', ${a.id}, '${a.descricao.substring(0,40).replace(/'/g,"\\'")}...')">🗑</button>
+    </div>`;
+}
+
+//Refresh 
+async function refreshSummaries() {
+  summaries = await api('/eixos/');
+  updateHeaderStats();
+  renderGrid();
+}
+
+async function refreshDetail() {
+  if (!activeEixo) return;
+  const eixo = await api(`/eixos/${activeEixo}`);
+  renderDetail(eixo);
+}
+
+// Modal
+let modalContext = {};
+
+function openModal(type, parentId = null) {
+  modalContext = { type, parentId };
+  const overlay = document.getElementById('modal-overlay');
+  const title   = document.getElementById('modal-title');
+  const body    = document.getElementById('modal-body');
+
+  const forms = {
+    eixo: {
+      title: 'Novo Eixo',
+      html: `
+        <div class="form-group"><label>Número</label><input id="f-numero" placeholder="Ex: 8" /></div>
+        <div class="form-group"><label>Nome</label><input id="f-nome" placeholder="Nome do eixo" /></div>
+        <div class="form-group"><label>Objetivo</label><input id="f-objetivo" placeholder="Objetivo principal" /></div>
+        <button class="btn btn-primary" onclick="submitModal()">Criar Eixo</button>`,
+    },
+    atividade: {
+      title: 'Nova Atividade',
+      html: `
+        <div class="form-group"><label>Nome da Atividade</label><input id="f-nome" placeholder="Descreva a atividade" /></div>
+        <button class="btn btn-primary" onclick="submitModal()">Criar Atividade</button>`,
+    },
+    acao: {
+      title: 'Nova Ação',
+      html: `
+        <div class="form-group"><label>Descrição</label><input id="f-descricao" placeholder="Descreva a ação" /></div>
+        <div class="form-group"><label>Áreas envolvidas</label><input id="f-areas" placeholder="Ex: NSDIGI, SMS" /></div>
+        <div class="form-row">
+          <div class="form-group"><label>Início</label><input id="f-inicio" placeholder="DD/MM/AAAA" /></div>
+          <div class="form-group"><label>Término</label><input id="f-termino" placeholder="DD/MM/AAAA" /></div>
+        </div>
+        <button class="btn btn-primary" onclick="submitModal()">Criar Ação</button>`,
+    },
+  };
+
+  title.textContent = forms[type].title;
+  body.innerHTML = forms[type].html;
+  overlay.classList.add('open');
+  body.querySelector('input').focus();
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+async function submitModal() {
+  const { type, parentId } = modalContext;
+  
+  try {
+    if (type === 'eixo') {
+      const numero = document.getElementById('f-numero').value.trim();
+      const nome   = document.getElementById('f-nome').value.trim();
+      if (!numero || !nome) return toast('Preencha número e nome', true);
+      await api('/eixos/', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          numero, nome,
+          objetivo: document.getElementById('f-objetivo').value,
+        }),
+      });
+    } else if (type === 'atividade') {
+      const nome = document.getElementById('f-nome').value.trim();
+      if (!nome) return toast('Preencha o nome', true);
+      await api(`/atividades/${parentId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nome }),
+      });
+    } else if (type === 'acao') {
+      const descricao = document.getElementById('f-descricao').value.trim();
+      if (!descricao) return toast('Preencha a descrição', true);
+      await api(`/acoes/${parentId}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          descricao,
+          areas:   document.getElementById('f-areas').value,
+          inicio:  document.getElementById('f-inicio').value,
+          termino: document.getElementById('f-termino').value,
+        }),
+      });
+    }
+    closeModal();
+    toast('Criado com sucesso');
+    await refreshSummaries();
+    await refreshDetail();
+  } catch (e) { toast(`Erro: ${e.message}`, true); }
+}
+
+//Confirm delete
+let confirmCallback = null;
+
+function confirmDelete(type, id, name) {
+  const labels = { eixo: 'eixo', atividade: 'atividade', acao: 'ação' };
+  document.getElementById('confirm-msg').innerHTML =
+    `Excluir ${labels[type]} <strong>"${name}"</strong>?${type !== 'acao' ? '<br><small>Todos os itens dentro serão excluídos.</small>' : ''}`;
+  confirmCallback = async () => {
+    const paths = { eixo: `/eixos/${id}`, atividade: `/atividades/${id}`, acao: `/acoes/${id}` };
+    await api(paths[type], { method: 'DELETE' });
+    toast('🗑 Excluído');
+    if (type === 'eixo' && activeEixo === id) {
+      activeEixo = null;
+      document.getElementById('detail').innerHTML = `
+        <div class="empty-state"><span class="arrow">←</span><span>Selecione um eixo para ver as atividades</span></div>`;
+    }
+    await refreshSummaries();
+    await refreshDetail();
+  };
+  document.getElementById('confirm-overlay').classList.add('open');
+}
+
+function closeConfirm() {
+  document.getElementById('confirm-overlay').classList.remove('open');
+  confirmCallback = null;
+}
+
+document.getElementById('confirm-ok').addEventListener('click', async () => {
+  if (confirmCallback) { try { await confirmCallback(); } catch(e) { toast(`${e.message}`, true); } }
+  closeConfirm();
+});
+
+//Helpers 
+function isLate(a) {
+  if (a.status === 'Concluído' || !a.termino) return false;
+  const [d, m, y] = a.termino.split('/');
+  return new Date(y, m - 1, d) < new Date();
+}
+
+function fmtDate(str) {
+  if (!str) return '—';
+  const months = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const [d, m] = str.split('/');
+  return `${parseInt(d)} ${months[parseInt(m) - 1]}`;
+}
+
+function styleSelect(sel, val) {
+  const c = STATUS_COLOR[val] || STATUS_COLOR[''];
+  sel.style.color = c;
+  sel.style.borderColor = c + '60';
+  sel.style.background  = c + '18';
+}
+
+let toastTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.borderColor = isErr ? 'var(--danger)' : 'var(--ok)';
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+init().catch(err => {
+  document.getElementById('loading').innerHTML =
+    `<p style="color:var(--danger)">Não foi possível conectar à API.<br><small>${err.message}</small></p>`;
+});

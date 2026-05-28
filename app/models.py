@@ -26,8 +26,6 @@ class EixoOut(BaseModel):
     id: str
     numero: str
     nome: str
-    icone: Optional[str]
-    cor: Optional[str]
     objetivo: Optional[str]
     descricao: Optional[str]
     atividades: List[AtividadeOut] = []
@@ -37,8 +35,6 @@ class EixoSummary(BaseModel):
     id: str
     numero: str
     nome: str
-    icone: Optional[str]
-    cor: Optional[str]
     total_acoes: int
     concluidas: int
     em_andamento: int
@@ -56,8 +52,6 @@ class AcaoStatusUpdate(BaseModel):
 class EixoCreate(BaseModel):
     numero: str
     nome: str
-    icone: Optional[str] = "📋"
-    cor: Optional[str] = "#64748b"
     objetivo: Optional[str] = ""
     descricao: Optional[str] = ""
 

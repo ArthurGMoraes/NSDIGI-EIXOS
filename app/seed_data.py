@@ -3,8 +3,6 @@ EIXOS = [
         "id": "E2",
         "numero": "2",
         "nome": "Formação e Desenvolvimento",
-        "icone": "🎓",
-        "cor": "#0ea5e9",
         "objetivo": "Implementar um GT de Saúde Digital microrregional para formação dos profissionais de saúde",
         "descricao": (
             "Fortalecer a capacidade institucional dos municípios para planejar, implementar e sustentar "
@@ -57,8 +55,6 @@ EIXOS = [
         "id": "E4",
         "numero": "4",
         "nome": "Telessaúde",
-        "icone": "📡",
-        "cor": "#8b5cf6",
         "objetivo": "Utilizar Telessaúde para otimizar e ampliar o acesso aos serviços de saúde na microrregião",
         "descricao": (
             "Ampliar a capacidade de atendimento e articulação em saúde por meio de tecnologias de telessaúde, "
@@ -110,8 +106,6 @@ EIXOS = [
         "id": "E6",
         "numero": "6",
         "nome": "Monitoramento, Avaliação e Informações",
-        "icone": "📊",
-        "cor": "#10b981",
         "objetivo": "Promover a integração de sistemas oficiais em todos os níveis de atenção para qualificação da informação em saúde",
         "descricao": (
             "Fortalecer a capacidade de uso qualificado da informação em saúde por meio da integração de sistemas, "

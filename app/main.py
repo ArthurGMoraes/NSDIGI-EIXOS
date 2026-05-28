@@ -4,7 +4,7 @@ from app.database import init_db
 from app.routers import eixos, atividades, acoes
 
 app = FastAPI(
-    title="OKR Saúde Digital — Microrregião BH",
+    title="PROTÓTIPO",
     description="API de acompanhamento dos OKRs do Plano Local de Saúde Digital",
     version="1.0.0",
 )

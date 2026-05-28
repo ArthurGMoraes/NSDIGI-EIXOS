@@ -23,7 +23,6 @@ def list_eixos():
         prog       = round(((concluidas + em_andamento * 0.5) / total * 100) if total else 0, 1)
         result.append(EixoSummary(
             id=e["id"], numero=e["numero"], nome=e["nome"],
-            icone=e["icone"], cor=e["cor"],
             total_acoes=total, concluidas=concluidas,
             em_andamento=em_andamento, atrasadas=atrasadas,
             progresso_pct=prog,
@@ -41,8 +40,8 @@ def create_eixo(body: EixoCreate):
         conn.close()
         raise HTTPException(409, f"Eixo {eixo_id} já existe")
     conn.execute(
-        "INSERT INTO eixos VALUES (?,?,?,?,?,?,?)",
-        (eixo_id, body.numero, body.nome, body.icone, body.cor, body.objetivo, body.descricao),
+        "INSERT INTO eixos VALUES (?,?,?,?,?)",
+        (eixo_id, body.numero, body.nome, body.objetivo, body.descricao),
     )
     conn.commit()
     e = conn.execute("SELECT * FROM eixos WHERE id = ?", (eixo_id,)).fetchone()
@@ -68,7 +67,6 @@ def get_eixo(eixo_id: str):
         ))
     conn.close()
     return EixoOut(id=e["id"], numero=e["numero"], nome=e["nome"],
-                   icone=e["icone"], cor=e["cor"],
                    objetivo=e["objetivo"], descricao=e["descricao"],
                    atividades=ats_out)
 
